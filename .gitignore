@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+web/dist/
+dist/
+*.tsbuildinfo
+
+# Local Rivet control plane data
+.rivetkit/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Docker
+*.tar
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local engine data and test data
+.data/
+.data-*/

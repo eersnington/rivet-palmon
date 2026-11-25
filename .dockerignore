@@ -1,0 +1,9 @@
+node_modules
+web/dist
+.data
+.data-*
+*.tar
+*.log
+*.png
+.env*
+.git
