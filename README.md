@@ -29,7 +29,7 @@ pnpm dev   # http://localhost:8133
 Open it in two windows to battle, or press **Play solo**. `pnpm test` runs end-to-end tests against a real local engine.
 
 On `localhost`, or with `?devtools` in the URL, the page shows the Effect UI devtools overlay: its timeline, state diffs and time travel.
-For agents, run `pnpm dev:web` beside the running server and point the agent at the devtools MCP server, `http://127.0.0.1:4774/mcp`.
+For agents, run `pnpm dev:web` beside the running server and point the agent at the devtools MCP server, `http://127.0.0.1:4783/mcp`.
 
 ## Deploy
 
