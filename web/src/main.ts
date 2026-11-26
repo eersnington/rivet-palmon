@@ -1,34 +1,18 @@
 import { BrowserKeyValueStore } from "@effect/platform-browser";
-import type { Client } from "@rivetkit/effect";
-import { Effect, Option, Schema } from "effect";
+import { Component, Head } from "@effect/ui";
+import { Effect, Layer, Option } from "effect";
 import { KeyValueStore } from "effect/persistence";
-import { ManagedResource, type Runtime } from "foldkit";
-import { Role } from "../../shared/api.ts";
-import { SaveProfile } from "./command.ts";
+import { clientLayer } from "./client.ts";
+import { commandsLayer, SaveProfile } from "./command.ts";
 import { CODE_LENGTH, MUSIC_OFF_STORAGE_KEY, MUTED_STORAGE_KEY, PROFILE_STORAGE_KEY, SEAT_STORAGE_KEY } from "./constant.ts";
-import { Message } from "./message.ts";
-import { type Model, newArena, Profile, Screen, Seat } from "./model.ts";
-import { closeSpeaker, openSpeaker, Speaker, type SpeakerService } from "./sound.ts";
-
-export { resources } from "./client.ts";
-export { Message } from "./message.ts";
-export { Model } from "./model.ts";
-export { subscriptions } from "./subscription.ts";
-export { update } from "./update.ts";
-export { view } from "./view/view.ts";
+import { PalmonDef, type PalmonProps } from "./definition.ts";
+import { newArena, Profile, Screen, Seat } from "./model.ts";
+import { Speaker } from "./sound.ts";
+import { subscriptions } from "./subscription.ts";
+import { update } from "./update.ts";
+import { view } from "./view/view.ts";
 
 // FLAGS
-
-export const Flags = Schema.Struct({
-	profile: Profile,
-	/** The room code in the link. */
-	hashCode: Schema.String,
-	/** The role this tab had in the room of the link, so a reload goes straight back in. */
-	maybeResumeRole: Schema.Option(Role),
-	isMuted: Schema.Boolean,
-	isMusicOff: Schema.Boolean,
-});
-export type Flags = typeof Flags.Type;
 
 const newProfile = Effect.sync((): Profile => ({ playerId: crypto.randomUUID(), name: "" }));
 
@@ -61,7 +45,7 @@ const savedSeat = Effect.gen(function* () {
 const codeFromHash = Effect.sync(() => location.hash.replace(/^#/, "").toUpperCase().slice(0, CODE_LENGTH));
 
 /** The saved player, the sound and music switches, and the room of the link. */
-export const flags: Effect.Effect<Flags> = Effect.gen(function* () {
+export const props: Effect.Effect<PalmonProps> = Effect.gen(function* () {
 	const profile = yield* savedProfile;
 	const isMuted = yield* savedSwitch(MUTED_STORAGE_KEY);
 	const isMusicOff = yield* savedSwitch(MUSIC_OFF_STORAGE_KEY);
@@ -71,51 +55,42 @@ export const flags: Effect.Effect<Flags> = Effect.gen(function* () {
 		Option.filter(maybeSeat, (seat) => seat.code === hashCode),
 		(seat) => seat.role,
 	);
-	return { profile, hashCode, maybeResumeRole, isMuted, isMusicOff };
+	return { initial: { profile, hashCode, maybeResumeRole, isMuted, isMusicOff } };
 });
 
-// INIT
+// COMPONENT
 
-export const init: Runtime.ApplicationInit<Model, Message, Flags, Client.Client, SpeakerService> = ({
-	profile,
-	hashCode,
-	maybeResumeRole,
-	isMuted,
-	isMusicOff,
-}) => ({
-	model: {
-		profile,
-		codeInput: hashCode,
-		isCreatingRoom: false,
-		recent: [],
-		screen: Option.match(
-			Option.filter(maybeResumeRole, () => hashCode.length === CODE_LENGTH),
-			{
-				onNone: () => Screen.Home(),
-				onSome: (role) => Screen.Arena({ arena: newArena(hashCode, role) }),
-			},
-		),
-		maybeNotice: Option.none(),
-		noticeCount: 0,
-		isSoundOn: !isMuted,
-		isMusicOn: !isMusicOff,
-		hasInteracted: false,
+export const PalmonNoDeps = PalmonDef.make({
+	init: ($) => {
+		const { profile, hashCode, maybeResumeRole, isMuted, isMusicOff } = $.props.initial;
+		return $.set({
+			profile,
+			codeInput: hashCode,
+			isCreatingRoom: false,
+			recent: [],
+			screen: Option.match(
+				Option.filter(maybeResumeRole, () => hashCode.length === CODE_LENGTH),
+				{
+					onNone: () => Screen.Home(),
+					onSome: (role) => Screen.Arena({ arena: newArena(hashCode, role) }),
+				},
+			),
+			maybeNotice: Option.none(),
+			noticeCount: 0,
+			isSoundOn: !isMuted,
+			isMusicOn: !isMusicOff,
+			hasInteracted: false,
+		})
+			// A new player id is saved at once, so a reload keeps the seat it takes.
+			.run(SaveProfile.make({ profile }));
 	},
-	// A new player id is saved at once, so a reload keeps the seat it takes.
-	commands: [SaveProfile({ profile })],
+	update,
+	subscriptions,
+	head: () => [Head.title("Palmon")],
+	view,
 });
 
-// MANAGED RESOURCES
-
-export const managedResources = ManagedResource.make<Model, Message>()((entry) => ({
-	speaker: entry(Schema.Option(Schema.Null), {
-		resource: Speaker,
-		modelToMaybeRequirements: (model) =>
-			(model.isSoundOn || model.isMusicOn) && model.hasInteracted ? Option.some(null) : Option.none(),
-		acquire: () => openSpeaker,
-		release: closeSpeaker,
-		onAcquired: () => Message.AcquiredSpeaker(),
-		onReleased: () => Message.ReleasedSpeaker(),
-		onAcquireError: (error) => Message.FailedAcquireSpeaker({ error: String(error) }),
-	}),
-}));
+/** The app with its Rivet client, its Commands and the speaker. The client and the speaker live as long as the app. */
+export const Palmon = PalmonNoDeps.pipe(
+	Component.provide(commandsLayer.pipe(Layer.provideMerge(Layer.mergeAll(clientLayer, Speaker.layer)))),
+);

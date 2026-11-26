@@ -14,23 +14,25 @@ const TIMER_PIPS = 12;
 const LINE_KEPT_MS = 86_400_000;
 
 const timerView = (arena: Arena, view: RoomView, h: H) => {
-	if (view.phase !== "pick" || view.deadlineAt === null || view.phaseMs === 0) return h.div([h.Class("timer idle")], []);
+	if (view.phase !== "pick" || view.deadlineAt === null || view.phaseMs === 0) return h.div.class("timer idle");
 	const left = remainingMs(arena, view);
 	const lit = Math.ceil((left / view.phaseMs) * TIMER_PIPS);
-	return h.div(
-		[h.Class(`timer ${lit <= 3 ? "urgent" : ""}`), h.AriaLabel(`${Math.ceil(left / 1000)} seconds`)],
-		[icon("clock", "", h), pips(TIMER_PIPS, lit, "time", h)],
-	);
+	return h.div
+		.class(`timer ${lit <= 3 ? "urgent" : ""}`)
+		.attr("aria-label", `${Math.ceil(left / 1000)} seconds`)
+		.children(icon("clock", "", h), pips(TIMER_PIPS, lit, "time", h));
 };
 
 /** Text that types itself out, one letter at a time, from `delayMs`. */
 const typedView = (text: string, delayMs: number, h: H) =>
-	h.span(
-		[h.Class("typed"), h.AriaLabel(text)],
-		[...text].map((char, index) =>
-			h.span([h.Class("ch"), h.AriaHidden(true), h.Style({ "animation-delay": ms(delayMs + index * 24) })], [char === " " ? " " : char]),
-		),
-	);
+	h.span
+		.class("typed")
+		.attr("aria-label", text)
+		.children(
+			[...text].map((char, index) =>
+				h.span.class("ch").attr("aria-hidden", "true").style({ animationDelay: ms(delayMs + index * 24) }).children(char),
+			),
+		);
 
 /** One message of the text box, and when it shows. */
 interface Line {
@@ -118,61 +120,56 @@ const POWER: Readonly<Record<Card, string>> = { hit: "3", smash: "6", guard: "Bl
 const secretMenuView = (arena: Arena, h: H) => {
 	const isRefused = arena.peek._tag === "Refused";
 	const isTrying = arena.peek._tag === "Trying";
-	return h.div(
-		[h.Class("menu secret")],
-		[
-			h.keyed("div")(
-				`locks-${arena.peek._tag}`,
-				[h.Class(`locks ${isRefused ? "shake" : ""}`)],
-				[0, 1, 2, 3].map(() => h.div([h.Class("move px out")], [icon("lock", "lock-icon", h)])),
-			),
-			isRefused
-				? h.keyed("span")("nope", [h.Class("nope stamp")], ["Nope"])
-				: h.button(
-						[h.Type("button"), h.Class("btn small peek"), h.Disabled(isTrying), h.OnClick(Message.ClickedPeek())],
-						[icon("eye", "", h), isTrying ? "…" : "Peek"],
-					),
-		],
+	return h.div.class("menu secret").children(
+		h.div
+			.key(`locks-${arena.peek._tag}`)
+			.class(`locks ${isRefused ? "shake" : ""}`)
+			.children([0, 1, 2, 3].map(() => h.div.class("move px out").children(icon("lock", "lock-icon", h)))),
+		isRefused
+			? h.span.key("nope").class("nope stamp").children("Nope")
+			: h.button
+					.attr("type", "button")
+					.class("btn small peek")
+					.disabled(isTrying)
+					.on("click", Message.ClickedPeek())
+					.children(icon("eye", "", h), isTrying ? "…" : "Peek"),
 	);
 };
 
+const waitingView = (h: H) => h.div.class("menu-end").children(h.span.class("bob").children("Waiting"));
+
 const lobbyMenuView = (arena: Arena, me: FighterView | undefined, them: FighterView | undefined, h: H) => {
-	if (arena.role === "spectator") return h.div([h.Class("menu-end")], [h.span([h.Class("bob")], ["Waiting"])]);
+	if (arena.role === "spectator") return waitingView(h);
 	if (me === undefined || me.critter === null) {
-		return h.div(
-			[h.Class("picker")],
+		return h.div.class("picker").children(
 			CREATURES.map((critter, index) => {
 				const info = creatureInfo(critter);
-				return h.button(
-					[
-						h.Type("button"),
-						h.DataAttribute("critter", critter),
-						h.Class("pick px dealt"),
-						h.Style({ "--type": info.typeColor, "animation-delay": ms(index * 70) }),
-						h.Disabled(arena.isPicking),
-						h.OnClick(Message.ClickedCritter({ critter })),
-					],
-					[miniSprite(critter, "", h), h.span([h.Class("move-name")], [info.name]), h.span([h.Class("type")], [info.type])],
-				);
+				return h.button
+					.attrs({ type: "button", "data-critter": critter })
+					.class("pick px dealt")
+					.style({ "--type": info.typeColor, animationDelay: ms(index * 70) })
+					.disabled(arena.isPicking)
+					.on("click", Message.ClickedCritter({ critter }))
+					.children(miniSprite(critter, "", h), h.span.class("move-name").children(info.name), h.span.class("type").children(info.type));
 			}),
 		);
 	}
 	return them === undefined
-		? h.div([h.Class("menu-end")], [h.button([h.Type("button"), h.Class("btn primary big"), h.OnClick(Message.ClickedCopyLink())], ["Invite"])])
-		: h.div([h.Class("menu-end")], [h.span([h.Class("bob")], ["Waiting"])]);
+		? h.div
+				.class("menu-end")
+				.children(h.button.attr("type", "button").class("btn primary big").on("click", Message.ClickedCopyLink()).children("Invite"))
+		: waitingView(h);
 };
 
 /** The room ends itself when this bar runs out, and everyone goes home. */
 const endMenuView = (arena: Arena, view: RoomView, h: H) => {
 	const left = view.phaseMs === 0 ? 0 : remainingMs(arena, view) / view.phaseMs;
-	return h.div(
-		[h.Class("menu-end")],
-		[
-			h.button(
-				[h.Type("button"), h.Class("btn primary big home-btn"), h.OnClick(Message.ClickedLeave())],
-				["Home", h.span([h.Class("home-drain"), h.Style({ transform: `scaleX(${Math.max(0, Math.min(1, left))})` })], [])],
-			),
-		],
+	return h.div.class("menu-end").children(
+		h.button
+			.attr("type", "button")
+			.class("btn primary big home-btn")
+			.on("click", Message.ClickedLeave())
+			.children("Home", h.span.class("home-drain").style({ transform: `scaleX(${Math.max(0, Math.min(1, left))})` })),
 	);
 };
 
@@ -181,36 +178,30 @@ const moveMenuView = (arena: Arena, view: RoomView, me: FighterView | undefined,
 	const info = creatureInfo(critter);
 	const hand = Option.getOrNull(currentHand(arena, view));
 	const isPick = view.phase === "pick";
-	return h.div(
-		[h.Class("menu")],
+	return h.div.class("menu").children(
 		MENU_ORDER.map((card, index) => {
 			const charges = hand === null ? 0 : hand.cards.filter((entry) => entry === card).length;
 			const isChosen = hand?.played === card;
 			const canPlay = isPick && hand !== null && hand.played === null && charges > 0;
 			const typeColor = card === "guard" ? "#4fd8d0" : card === "snack" ? "#86d27a" : info.typeColor;
-			return h.keyed("button")(
-				`move-${card}`,
-				[
-					h.Type("button"),
-					h.DataAttribute("card", card),
-					h.Class(
-						`move px ${isChosen ? "chosen" : ""} ${charges === 0 || (hand?.played != null && !isChosen) ? "out" : ""} ${hand === null ? "" : "dealt"}`,
-					),
-					h.Style({ "--type": typeColor, "animation-delay": ms(index * 60) }),
-					h.Disabled(!canPlay),
-					h.OnClick(Message.ClickedCard({ card })),
-				],
-				[
-					h.span([h.Class("move-name")], [info.moves[card]]),
-					h.span(
-						[h.Class("move-meta")],
-						[
-							h.span([h.Class("type")], [moveType(critter, card)]),
-							h.span([h.Class("power")], [charges === 0 ? "—" : charges > 1 ? `${POWER[card]} x${charges}` : POWER[card]]),
-						],
-					),
-				],
-			);
+			return h.button
+				.key(`move-${card}`)
+				.attrs({ type: "button", "data-card": card })
+				.class(
+					`move px ${isChosen ? "chosen" : ""} ${charges === 0 || (hand?.played != null && !isChosen) ? "out" : ""} ${hand === null ? "" : "dealt"}`,
+				)
+				.style({ "--type": typeColor, animationDelay: ms(index * 60) })
+				.disabled(!canPlay)
+				.on("click", Message.ClickedCard({ card }))
+				.children(
+					h.span.class("move-name").children(info.moves[card]),
+					h.span
+						.class("move-meta")
+						.children(
+							h.span.class("type").children(moveType(critter, card)),
+							h.span.class("power").children(charges === 0 ? "—" : charges > 1 ? `${POWER[card]} x${charges}` : POWER[card]),
+						),
+				);
 		}),
 	);
 };
@@ -230,28 +221,21 @@ export const consoleView = (
 	beats: ReadonlyArray<Beat>,
 	h: H,
 ) =>
-	h.div(
-		[h.Class("console")],
-		[
-			h.div(
-				[h.Class("say px"), h.AriaLive("polite")],
-				[
-					timerView(arena, view, h),
-					...sayLines(arena, view, me, them, beats).map((line) =>
-						h.keyed("div")(
-							line.key,
-							[
-								// The animation list never changes, so a line that learns its end later keeps its
-								// start time instead of restarting `say-out` and staying on screen.
-								h.Class("say-line"),
-								h.Style({ "--from": ms(line.fromMs), "--until": ms(line.untilMs ?? LINE_KEPT_MS) }),
-							],
-							line.lines.map((text, index) => h.div([], [typedView(text, line.fromMs + (index === 0 ? 0 : 420), h)])),
-						),
-					),
-				],
+	h.div.class("console").children(
+		h.div
+			.class("say px")
+			.attr("aria-live", "polite")
+			.children(
+				timerView(arena, view, h),
+				sayLines(arena, view, me, them, beats).map((line) =>
+					h.div
+						.key(line.key)
+						// The animation list never changes, so a line that learns its end later keeps its
+						// start time instead of restarting `say-out` and staying on screen.
+						.class("say-line")
+						.style({ "--from": ms(line.fromMs), "--until": ms(line.untilMs ?? LINE_KEPT_MS) })
+						.children(line.lines.map((text, index) => h.div.children(typedView(text, line.fromMs + (index === 0 ? 0 : 420), h)))),
+				),
 			),
-			h.div([h.Class("menu-wrap")], [menuView(arena, view, me, them, h)]),
-		],
+		h.div.class("menu-wrap").children(menuView(arena, view, me, them, h)),
 	);
-

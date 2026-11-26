@@ -7,7 +7,7 @@ WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml rivetkit-effect-pr1800.tgz ./
 
-# Builds the frontend to web/dist.
+# Builds the frontend to web/dist. `@effect/ui` installs from pkg.pr.new, so this step needs network.
 FROM base AS web
 RUN pnpm install --frozen-lockfile
 COPY tsconfig.json ./

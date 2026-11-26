@@ -1,5 +1,5 @@
+import { UiSchema } from "@effect/ui";
 import { Option, Schema } from "effect";
-import { defineTaggedUnion } from "foldkit/schema";
 import { type FighterView, GameResult, HandView, Role, RoomView } from "../../shared/api.ts";
 
 // PROFILE
@@ -12,10 +12,24 @@ export type Profile = typeof Profile.Type;
 export const Seat = Schema.Struct({ code: Schema.String, role: Role });
 export type Seat = typeof Seat.Type;
 
+// FLAGS
+
+/** What this browser saved, read before the app mounts. */
+export const Flags = Schema.Struct({
+	profile: Profile,
+	/** The room code in the link. */
+	hashCode: Schema.String,
+	/** The role this tab had in the room of the link, so a reload goes straight back in. */
+	maybeResumeRole: Schema.Option(Role),
+	isMuted: Schema.Boolean,
+	isMusicOff: Schema.Boolean,
+});
+export type Flags = typeof Flags.Type;
+
 // ARENA
 
 /** A spectator's try to see a hand. The room refuses it. */
-export const Peek = defineTaggedUnion({
+export const Peek = UiSchema.TaggedEnum({
 	Idle: {},
 	Trying: {},
 	Refused: {},
@@ -40,7 +54,7 @@ export const Arena = Schema.Struct({
 });
 export type Arena = typeof Arena.Type;
 
-export const Screen = defineTaggedUnion({
+export const Screen = UiSchema.TaggedEnum({
 	Home: {},
 	Arena: { arena: Arena },
 });

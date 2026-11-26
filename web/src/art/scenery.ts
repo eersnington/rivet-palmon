@@ -75,7 +75,7 @@ const SCENE = {
 };
 
 /** CSS variables that hand the scene art to the stylesheet. */
-export const sceneStyle: Record<string, string> = {
+export const sceneStyle: Readonly<Record<`--${string}`, string>> = {
 	"--clouds-day": SCENE.day.clouds,
 	"--far-day": SCENE.day.far,
 	"--near-day": SCENE.day.near,

@@ -2,7 +2,7 @@
   "name": "rivet-palmon",
   "version": "0.1.0",
   "private": true,
-    "license": "MIT",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "pnpm build && pnpm start:local",
@@ -20,10 +20,10 @@
   },
   "devDependencies": {
     "@effect/platform-browser": "4.1.5",
-    "@foldkit/vite-plugin": "0.29.1",
+    "@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@87a704b",
+    "@effect/ui-kit": "https://pkg.pr.new/Effect-TS/ui/@effect/ui-kit@87a704b",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.18.1",
-    "foldkit": "0.171.0",
     "tailwindcss": "^4.3.3",
     "tone": "15.1.22",
     "typescript": "^7.0.2",

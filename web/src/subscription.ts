@@ -1,11 +1,14 @@
-import type { Client } from "@rivetkit/effect";
-import { Clock, Effect, Option, Schedule, Schema, Stream } from "effect";
-import { Dom, Subscription } from "foldkit";
-import { type RoomView, Role } from "../../shared/api.ts";
+import { Subscription } from "@effect/ui";
+import { HtmlSubscription } from "@effect/ui/html";
+import { Clock, Effect, Option, Schedule, Stream } from "effect";
+import type { Role, RoomView } from "../../shared/api.ts";
 import { joinParams, leaderboard, room } from "./client.ts";
 import { RECONNECT_DELAY, TICK_INTERVAL } from "./constant.ts";
 import { Message } from "./message.ts";
 import { maybeArenaOf, type Model } from "./model.ts";
+import { musicMoodOf } from "./music/mood.ts";
+import type { MusicMood } from "./music/player.ts";
+import { Speaker } from "./sound.ts";
 
 const stamp = (view: RoomView) =>
 	Clock.currentTimeMillis.pipe(Effect.map((receivedAtMs) => Message.UpdatedRoomView({ view, receivedAtMs })));
@@ -68,62 +71,53 @@ const clockTicks = Stream.tick(TICK_INTERVAL).pipe(
 	Stream.map((nowMs) => Message.TickedClock({ nowMs })),
 );
 
-/** The first key or pointer press on the page. After it, the browser allows audio. */
-const firstInteraction = Stream.merge(
-	Dom.streamFromEvent({ target: window, type: "pointerdown", mapEvent: () => null }),
-	Dom.streamFromEvent({ target: window, type: "keydown", mapEvent: () => null }),
-).pipe(Stream.take(1), Stream.as(Message.InteractedWithPage()));
+/** Opens the speaker and keeps it open until the Subscription stops. */
+const openSpeaker = Stream.unwrap(
+	Effect.gen(function* () {
+		yield* (yield* Speaker).open;
+		return Stream.never;
+	}),
+);
 
-const RoomDependencies = Schema.Struct({
-	code: Schema.String,
-	role: Role,
-	playerId: Schema.String,
-	name: Schema.String,
-});
+const setMusicMood = (mood: MusicMood) =>
+	Stream.fromEffect(Effect.gen(function* () {
+		yield* (yield* Speaker).setMood(mood);
+	})).pipe(Stream.drain);
 
-export const subscriptions = Subscription.make<Model, Message, Client.Client>()((entry) => ({
-	leaderboard: entry(
-		{ isHome: Schema.Boolean },
-		{
-			modelToDependencies: (model) => ({ isHome: model.screen._tag === "Home" }),
-			dependenciesToStream: ({ isHome }) => (isHome ? leaderboardEvents : Stream.empty),
-		},
-	),
-	room: entry(
-		{ maybeRoom: Schema.Option(RoomDependencies) },
-		{
-			modelToDependencies: (model) => ({
-				maybeRoom: Option.map(maybeArenaOf(model), (arena) => ({
-					code: arena.code,
-					role: arena.role,
-					playerId: model.profile.playerId,
-					name: model.profile.name.trim(),
-				})),
-			}),
-			dependenciesToStream: ({ maybeRoom }) =>
-				Option.match(maybeRoom, {
-					onNone: () => Stream.empty,
-					onSome: ({ code, role, playerId, name }) => roomEvents(code, role, playerId, name),
-				}),
-		},
-	),
-	clock: entry(
-		{ isTicking: Schema.Boolean },
-		{
-			modelToDependencies: (model) => ({
-				isTicking: Option.exists(
-					Option.flatMap(maybeArenaOf(model), (arena) => arena.maybeView),
-					(view) => view.deadlineAt !== null,
+const setEffectsOn = (isOn: boolean) =>
+	Stream.fromEffect(Effect.gen(function* () {
+		yield* (yield* Speaker).setEffectsOn(isOn);
+	})).pipe(Stream.drain);
+
+export const subscriptions = ({ model }: { readonly model: Model }) => {
+	const maybeArena = maybeArenaOf(model);
+	const isTicking = Option.exists(
+		Option.flatMap(maybeArena, (arena) => arena.maybeView),
+		(view) => view.deadlineAt !== null,
+	);
+	// A browser starts audio only after the viewer pressed something on the page.
+	const isSpeakerWanted = (model.isSoundOn || model.isMusicOn) && model.hasInteracted;
+	return [
+		model.screen._tag === "Home" && Subscription.make("leaderboard", leaderboardEvents),
+		...Option.toArray(
+			Option.map(maybeArena, (arena) =>
+				Subscription.make(
+					"room",
+					[arena.code, arena.role, model.profile.playerId, model.profile.name.trim()],
+					([code, role, playerId, name]) => roomEvents(code, role, playerId, name),
 				),
-			}),
-			dependenciesToStream: ({ isTicking }) => (isTicking ? clockTicks : Stream.empty),
-		},
-	),
-	firstInteraction: entry(
-		{ hasInteracted: Schema.Boolean },
-		{
-			modelToDependencies: (model) => ({ hasInteracted: model.hasInteracted }),
-			dependenciesToStream: ({ hasInteracted }) => (hasInteracted ? Stream.empty : firstInteraction),
-		},
-	),
-}));
+			),
+		),
+		isTicking && Subscription.make("clock", clockTicks),
+		// The first key or press on the page. `pointerup` covers touch, where a press activates on release.
+		...(model.hasInteracted
+			? []
+			: (["mousedown", "pointerup", "keydown"] as const).map((event) =>
+					HtmlSubscription.onDocument(event, Message.InteractedWithPage()),
+				)),
+		isSpeakerWanted && Subscription.make("speaker", openSpeaker),
+		// The speaker keeps the latest mood and switch, so a speaker that opens later plays them too.
+		Subscription.make("music", musicMoodOf(model), setMusicMood),
+		Subscription.make("effects", model.isSoundOn, setEffectsOn),
+	];
+};

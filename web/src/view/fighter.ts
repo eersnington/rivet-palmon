@@ -19,22 +19,16 @@ export const shotsView = (view: RoomView, beats: ReadonlyArray<Beat>, me: Fighte
 		const weapon = creatureInfo(shooter.critter).weapon;
 		const direction = shooter.id === me?.id ? "up" : "down";
 		return shotTimes(beat).map((at, index) =>
-			h.keyed("div")(
-				`shot-${view.turn}-${beat.play.playerId}-${index}`,
-				[
-					h.Class(`shot ${direction} ${weapon.sound}`),
-					h.Style({ "--c1": weapon.trail[0], "--c2": weapon.trail[1], "animation-delay": ms(at) }),
-				],
-				[h.span([h.Class("bolt"), h.Style({ "animation-delay": ms(at) })], [])],
-			),
+			h.div
+				.key(`shot-${view.turn}-${beat.play.playerId}-${index}`)
+				.class(`shot ${direction} ${weapon.sound}`)
+				.style({ "--c1": weapon.trail[0], "--c2": weapon.trail[1], animationDelay: ms(at) })
+				.children(h.span.class("bolt").style({ animationDelay: ms(at) })),
 		);
 	});
 
 const emptySlotView = (side: Side, h: H) =>
-	h.div(
-		[h.Class(`slot ${side}`)],
-		[h.div([h.Class("platform")], []), h.div([h.Class("mon")], [pixelImg(EGG_URL, "Egg", "egg", h)])],
-	);
+	h.div.class(`slot ${side}`).children(h.div.class("platform"), h.div.class("mon").children(pixelImg(EGG_URL, "Egg", "egg", h)));
 
 /**
  * A fighter on its platform, and everything its beat draws around it. Each
@@ -65,61 +59,58 @@ export const fighterView = (maybeFighter: FighterView | undefined, side: Side, v
 				})
 			: Option.none();
 
-	return h.keyed("div")(
-		`slot-${fighter.id}`,
-		[h.Class(`slot ${side} ${fighter.online ? "" : "offline"}`)],
-		[
-			h.div([h.Class("platform")], []),
+	return h.div
+		.key(`slot-${fighter.id}`)
+		.class(`slot ${side} ${fighter.online ? "" : "offline"}`)
+		.children(
+			h.div.class("platform"),
 			// Turn 1 starts with a send-out: a pop of light, then the creature.
-			h.keyed("div")(
-				`send-${view.code}`,
-				[h.Class(`mon ${view.turn <= 1 && view.phase === "pick" ? "send-out" : ""}`)],
-				[
-					h.keyed("div")(
-						`act-${step}`,
-						[h.Class(`act ${actClass} ${ending}`), h.Style({ "animation-delay": ms(own?.startMs ?? 0) })],
-						[
-							h.keyed("div")(
-								`hurt-${step}`,
-								[h.Class(`hurt-wrap ${hurtAt === undefined ? "" : "hurt"}`), h.Style({ "animation-delay": ms(hurtAt ?? 0) })],
-								[creatureView(critter, side === "near" ? "back" : "front", isArmed, h, maybeMotion)],
-							),
-						],
-					),
-				],
-			),
-			...(view.phase === "pick" && fighter.locked ? [h.keyed("div")(`lock-${view.turn}`, [h.Class("ready pop-in")], ["Ready"])] : []),
-			...(attacks && own !== undefined
-				? shotTimes(own).map((at, index) =>
-						h.keyed("div")(
-							`muzzle-${step}-${index}`,
-							[
-								h.Class("muzzle"),
-								h.Style({
-									left: `${side === "near" ? 100 - weapon.tip.x : weapon.tip.x}%`,
-									top: `${weapon.tip.y}%`,
-									"animation-delay": ms(at),
-								}),
-							],
-							[icon("hit", "", h)],
+			h.div
+				.key(`send-${view.code}`)
+				.class(`mon ${view.turn <= 1 && view.phase === "pick" ? "send-out" : ""}`)
+				.children(
+					h.div
+						.key(`act-${step}`)
+						.class(`act ${actClass} ${ending}`)
+						.style({ animationDelay: ms(own?.startMs ?? 0) })
+						.children(
+							h.div
+								.key(`hurt-${step}`)
+								.class(`hurt-wrap ${hurtAt === undefined ? "" : "hurt"}`)
+								.style({ animationDelay: ms(hurtAt ?? 0) })
+								.children(creatureView(critter, side === "near" ? "back" : "front", isArmed, h, maybeMotion)),
 						),
-					)
-				: []),
-			...(own !== undefined && own.play.card === "guard"
-				? [h.keyed("div")(`shield-${step}`, [h.Class("shield-ring"), h.Style({ "animation-delay": ms(own.startMs + 150) })], [])]
-				: []),
-			...(own !== undefined && own.play.card === "snack" ? [burst(`heal-${step}`, ["#86d27a", "#ffffff"], own.startMs + 200, false, h)] : []),
-			...(hurtAt !== undefined && theirs !== undefined
-				? [burst(`hit-${step}`, particleColors[attackerCritter], hurtAt, theirs.play.card === "smash", h)]
-				: []),
-			...(hurtAt !== undefined && play !== undefined
-				? [h.keyed("div")(`dmg-${step}`, [h.Class("float damage"), h.Style({ "animation-delay": ms(hurtAt) })], [`-${play.damage}`])]
-				: []),
-			...(view.phase === "reveal" && play !== undefined && play.healed > 0 && own !== undefined
-				? [h.keyed("div")(`healed-${step}`, [h.Class("float heal"), h.Style({ "animation-delay": ms(own.impactMs) })], [`+${play.healed}`])]
-				: []),
-		],
-	);
+				),
+			view.phase === "pick" && fighter.locked && h.div.key(`lock-${view.turn}`).class("ready pop-in").children("Ready"),
+			attacks &&
+				own !== undefined &&
+				shotTimes(own).map((at, index) =>
+					h.div
+						.key(`muzzle-${step}-${index}`)
+						.class("muzzle")
+						.style({
+							left: `${side === "near" ? 100 - weapon.tip.x : weapon.tip.x}%`,
+							top: `${weapon.tip.y}%`,
+							animationDelay: ms(at),
+						})
+						.children(icon("hit", "", h)),
+				),
+			own !== undefined &&
+				own.play.card === "guard" &&
+				h.div.key(`shield-${step}`).class("shield-ring").style({ animationDelay: ms(own.startMs + 150) }),
+			own !== undefined && own.play.card === "snack" && burst(`heal-${step}`, ["#86d27a", "#ffffff"], own.startMs + 200, false, h),
+			hurtAt !== undefined &&
+				theirs !== undefined &&
+				burst(`hit-${step}`, particleColors[attackerCritter], hurtAt, theirs.play.card === "smash", h),
+			hurtAt !== undefined &&
+				play !== undefined &&
+				h.div.key(`dmg-${step}`).class("float damage").style({ animationDelay: ms(hurtAt) }).children(`-${play.damage}`),
+			view.phase === "reveal" &&
+				play !== undefined &&
+				play.healed > 0 &&
+				own !== undefined &&
+				h.div.key(`healed-${step}`).class("float heal").style({ animationDelay: ms(own.impactMs) }).children(`+${play.healed}`),
+		);
 };
 
 /**
@@ -134,38 +125,32 @@ export const hpBoxView = (
 	tag: string,
 	h: H,
 ) => {
-	if (maybeFighter === undefined) return h.div([h.Class(`hpbox ${side} px empty`)], [h.span([h.Class("dim")], ["Waiting…"])]);
+	if (maybeFighter === undefined) return h.div.class(`hpbox ${side} px empty`).children(h.span.class("dim").children("Waiting…"));
 	const fighter = maybeFighter;
 	const info = fighter.critter === null ? undefined : creatureInfo(fighter.critter);
 	const delay = view.phase === "reveal" ? hpChangeMs(beats, fighter) : 0;
 	const ratio = fighter.hp / MAX_HP;
 	const tone = ratio > 0.5 ? "ok" : ratio > 0.25 ? "mid" : "low";
-	return h.keyed("div")(
-		`hp-${fighter.id}`,
-		[h.Class(`hpbox ${side} px`)],
-		[
-			h.div(
-				[h.Class("hp-top")],
-				[
-					h.span([h.Class("mon-name")], [info?.name ?? "?"]),
-					...(info === undefined ? [] : [h.span([h.Class("type"), h.Style({ background: info.typeColor })], [info.type])]),
-				],
-			),
-			h.div([h.Class("hp-owner")], [h.span([], [fighter.name]), ...(tag === "" ? [] : [h.span([h.Class("you")], [tag])])]),
-			h.div(
-				[h.Class("hp-row")],
-				[
-					h.span([h.Class("hp-label")], ["HP"]),
-					h.div(
-						[h.Class("hp-track")],
-						[
-							h.div([h.Class("hp-ghost"), h.Style({ transform: `scaleX(${ratio})`, "transition-delay": ms(delay + 350) })], []),
-							h.div([h.Class(`hp-fill ${tone}`), h.Style({ transform: `scaleX(${ratio})`, "transition-delay": ms(delay) })], []),
-						],
+	return h.div
+		.key(`hp-${fighter.id}`)
+		.class(`hpbox ${side} px`)
+		.children(
+			h.div
+				.class("hp-top")
+				.children(
+					h.span.class("mon-name").children(info?.name ?? "?"),
+					info !== undefined && h.span.class("type").style({ background: info.typeColor }).children(info.type),
+				),
+			h.div.class("hp-owner").children(h.span.children(fighter.name), tag !== "" && h.span.class("you").children(tag)),
+			h.div.class("hp-row").children(
+				h.span.class("hp-label").children("HP"),
+				h.div
+					.class("hp-track")
+					.children(
+						h.div.class("hp-ghost").style({ transform: `scaleX(${ratio})`, transitionDelay: ms(delay + 350) }),
+						h.div.class(`hp-fill ${tone}`).style({ transform: `scaleX(${ratio})`, transitionDelay: ms(delay) }),
 					),
-					h.span([h.Class("hp-num"), h.Style({ "--hp": `${fighter.hp}`, "transition-delay": ms(delay) })], []),
-				],
+				h.span.class("hp-num").style({ "--hp": `${fighter.hp}`, transitionDelay: ms(delay) }),
 			),
-		],
-	);
+		);
 };

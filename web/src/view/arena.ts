@@ -23,97 +23,83 @@ const resultLine = (fighters: ReadonlyArray<Fighter>, winner: Fighter | undefine
 const resultView = (view: RoomView, h: H) => {
 	const winner = view.fighters.find((fighter) => fighter.id === view.winnerId);
 	const shown = winner === undefined ? view.fighters : [winner];
-	return h.keyed("div")(
-		`result-${view.code}`,
-		[h.Class("result")],
-		[
-			h.div(
-				[h.Class("result-card px")],
-				[
-					h.div([h.Class("crown-big")], [icon("crown", "", h)]),
-					h.div(
-						[h.Class("result-mons")],
+	return h.div
+		.key(`result-${view.code}`)
+		.class("result")
+		.children(
+			h.div.class("result-card px").children(
+				h.div.class("crown-big").children(icon("crown", "", h)),
+				h.div
+					.class("result-mons")
+					.children(
 						shown.flatMap((fighter) =>
-							fighter.critter === null ? [] : [h.div([h.Class("result-mon")], [creatureView(fighter.critter, "front", false, h)])],
+							fighter.critter === null ? [] : [h.div.class("result-mon").children(creatureView(fighter.critter, "front", false, h))],
 						),
 					),
-					h.div([h.Class("shout")], [winner === undefined ? "Draw!" : `${winner.name} wins!`]),
-					h.div(
-						[h.Class("result-sub")],
-						[resultLine(view.fighters, winner)],
-					),
-				],
+				h.div.class("shout").children(winner === undefined ? "Draw!" : `${winner.name} wins!`),
+				h.div.class("result-sub").children(resultLine(view.fighters, winner)),
 			),
 			burst("confetti-a", ["#ffd23f", "#ff86b0"], 300, true, h),
 			burst("confetti-b", ["#4fd8d0", "#86d27a"], 650, true, h),
 			burst("confetti-c", ["#ff8a3d", "#ffffff"], 1000, true, h),
-		],
-	);
+		);
 };
 
 const battleView = (model: Model, arena: Arena, view: RoomView, h: H) => {
 	const { me, them } = sidesOf(view, arena.role, model.profile.playerId);
 	const beats = view.phase === "reveal" ? revealBeats(view, me?.id) : [];
 	const bigHit = beats.find((beat) => beat.play.card === "smash" && view.plays.some((play) => play.playerId !== beat.play.playerId));
-	const quakeDelay = { "animation-delay": ms(bigHit?.impactMs ?? 0) };
+	const quakeDelay = { animationDelay: ms(bigHit?.impactMs ?? 0) };
 	// The computer trainer always wears its tag, so spectators can tell too.
 	const tagOf = (fighter: FighterView | undefined, tag: string) =>
 		fighter?.isCpu === true ? "CPU" : arena.role === "spectator" ? "" : tag;
-	return h.div(
-		[h.Class(`battle phase-${view.phase}`)],
-		[
-			h.keyed("div")(
-				`stage-${view.code}`,
-				[h.Class("stage px"), h.Style(sceneStyle)],
-				[
-					h.div([h.Class("sky")], []),
-					h.div([h.Class("clouds")], []),
-					// The hills shake by different amounts on a big hit, for a little parallax.
-					h.keyed("div")(`far-${view.turn}-${view.phase}`, [h.Class(`hills far ${bigHit ? "quake-far" : ""}`), h.Style(quakeDelay)], []),
-					h.keyed("div")(`near-${view.turn}-${view.phase}`, [h.Class(`hills near ${bigHit ? "quake-near" : ""}`), h.Style(quakeDelay)], []),
-					h.keyed("div")(
-						`shake-${view.turn}-${view.phase}`,
-						[h.Class(`arena-field ${bigHit ? "quake" : ""}`), h.Style(quakeDelay)],
-						[
-							fighterView(them, "far", view, beats, h),
-							fighterView(me, "near", view, beats, h),
-							...shotsView(view, beats, me, h),
-							hpBoxView(them, "far", view, beats, tagOf(them, "Rival"), h),
-							hpBoxView(me, "near", view, beats, tagOf(me, "You"), h),
-						],
+	return h.div.class(`battle phase-${view.phase}`).children(
+		h.div
+			.key(`stage-${view.code}`)
+			.class("stage px")
+			.style(sceneStyle)
+			.children(
+				h.div.class("sky"),
+				h.div.class("clouds"),
+				// The hills shake by different amounts on a big hit, for a little parallax.
+				h.div.key(`far-${view.turn}-${view.phase}`).class(`hills far ${bigHit ? "quake-far" : ""}`).style(quakeDelay),
+				h.div.key(`near-${view.turn}-${view.phase}`).class(`hills near ${bigHit ? "quake-near" : ""}`).style(quakeDelay),
+				h.div
+					.key(`shake-${view.turn}-${view.phase}`)
+					.class(`arena-field ${bigHit ? "quake" : ""}`)
+					.style(quakeDelay)
+					.children(
+						fighterView(them, "far", view, beats, h),
+						fighterView(me, "near", view, beats, h),
+						shotsView(view, beats, me, h),
+						hpBoxView(them, "far", view, beats, tagOf(them, "Rival"), h),
+						hpBoxView(me, "near", view, beats, tagOf(me, "You"), h),
 					),
-					...(bigHit === undefined
-						? []
-						: [h.keyed("div")(`flash-${view.turn}`, [h.Class("flash"), h.Style({ "animation-delay": ms(bigHit.impactMs) })], [])]),
-					...(view.phase === "over" ? [resultView(view, h)] : []),
-				],
+				bigHit !== undefined && h.div.key(`flash-${view.turn}`).class("flash").style({ animationDelay: ms(bigHit.impactMs) }),
+				view.phase === "over" && resultView(view, h),
 			),
-			consoleView(arena, view, me, them, beats, h),
-		],
+		consoleView(arena, view, me, them, beats, h),
 	);
 };
 
 const barView = (model: Model, arena: Arena, h: H) =>
-	h.header(
-		[h.Class("bar")],
-		[
-			h.button(
-				[h.Type("button"), h.Class("tag px code-tag"), h.OnClick(Message.ClickedCopyLink()), h.Title("Copy link")],
-				[arena.code],
-			),
-			...Option.match(arena.maybeView, {
-				onNone: () => [],
-				onSome: (view) => [
-					...(view.phase === "lobby" ? [] : [h.span([h.Class("tag px")], [`Turn ${view.turn}`])]),
-					...(view.spectators > 0 || arena.role === "spectator"
-						? [h.span([h.Class("tag px")], [icon("eye", "", h), `${Math.max(1, view.spectators)}`])]
-						: []),
-				],
-			}),
-			h.span([h.Class(`live ${arena.isLive ? "on" : ""}`), h.Title(arena.isLive ? "live" : "connecting")], []),
-			soundButtons(model, h),
-			h.button([h.Type("button"), h.Class("btn small leave"), h.OnClick(Message.ClickedLeave())], ["Leave"]),
-		],
+	h.header.class("bar").children(
+		h.button
+			.attrs({ type: "button", title: "Copy link" })
+			.class("tag px code-tag")
+			.on("click", Message.ClickedCopyLink())
+			.children(arena.code),
+		Option.match(arena.maybeView, {
+			onNone: () => null,
+			onSome: (view) => [
+				view.phase !== "lobby" && h.span.class("tag px").children(`Turn ${view.turn}`),
+				(view.spectators > 0 || arena.role === "spectator") &&
+					h.span.class("tag px").children(icon("eye", "", h), `${Math.max(1, view.spectators)}`),
+			],
+		}),
+		h.span.class(`live ${arena.isLive ? "on" : ""}`).attr("title", arena.isLive ? "live" : "connecting"),
+		soundButtons(model, h),
+		h.button.attr("type", "button").class("btn small leave").on("click", Message.ClickedLeave()).children("Leave"),
 	);
 
 /** A pixel wipe plays each time the screen changes between lobby, battle and result. */
@@ -124,14 +110,11 @@ const wipeKey = (arena: Arena) =>
 	});
 
 export const view = (model: Model, arena: Arena, h: H) =>
-	h.main(
-		[h.Class("arena-screen")],
-		[
-			h.keyed("div")(`wipe-${wipeKey(arena)}`, [h.Class("wipe"), h.AriaHidden(true)], []),
-			barView(model, arena, h),
-			Option.match(arena.maybeView, {
-				onNone: () => h.div([h.Class("loading")], [h.span([h.Class("bob")], ["…"])]),
-				onSome: (view) => battleView(model, arena, view, h),
-			}),
-		],
+	h.main.class("arena-screen").children(
+		h.div.key(`wipe-${wipeKey(arena)}`).class("wipe").attr("aria-hidden", "true"),
+		barView(model, arena, h),
+		Option.match(arena.maybeView, {
+			onNone: () => h.div.class("loading").children(h.span.class("bob").children("…")),
+			onSome: (view) => battleView(model, arena, view, h),
+		}),
 	);

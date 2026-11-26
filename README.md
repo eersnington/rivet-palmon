@@ -2,7 +2,7 @@
 
 ![Two players battle while a spectator watches with the hands locked](media/demo.gif)
 
-A pixel creature battle game, with friends by link or solo against the CPU. Each room is a Rivet Actor written with `@rivetkit/effect`, and the frontend is [Foldkit](https://foldkit.dev).
+A pixel creature battle game, with friends by link or solo against the CPU. Each room is a Rivet Actor written with `@rivetkit/effect`, and the frontend is [Effect UI](https://ui.effect.website).
 
 ## What it shows
 
@@ -37,10 +37,10 @@ The `Dockerfile` builds a runner image for Rivet Cloud. Set `PUBLIC_RIVET_ENDPOI
 ```
 shared/api.ts   contracts: Room and Leaderboard actors
 server/         room, rules, CPU trainer, leaderboard, HTTP
-web/src/        Foldkit app: model, update, commands, subscriptions, views
+web/src/        Effect UI app: model, update, commands, subscriptions, views
 web/src/art/    pixel art
 web/src/music/  chiptune score and player
 test/           end-to-end tests
 ```
 
-`rivetkit-effect-pr1800.tgz` is a prerelease of `@rivetkit/effect`.
+`rivetkit-effect-pr1800.tgz` is a prerelease of `@rivetkit/effect`. `@effect/ui` and `@effect/ui-kit` are not on npm yet: they are public-preview snapshots from [pkg.pr.new](https://pkg.pr.new/~/Effect-TS/ui), pinned to commit `87a704b` of [Effect-TS/ui](https://github.com/Effect-TS/ui).

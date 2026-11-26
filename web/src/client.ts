@@ -36,7 +36,7 @@ const getToken: NonNullable<Client.Options["getToken"]> = ({ forceRefresh }) =>
 	);
 
 /** One Rivet client for the app. A config that cannot load crashes the app. */
-export const resources = Layer.unwrap(
+export const clientLayer = Layer.unwrap(
 	Effect.gen(function* () {
 		const config = yield* fetchClientConfig;
 		const token = yield* fetchToken(false);

@@ -1,17 +1,7 @@
-import { Runtime } from "foldkit";
-import { Flags, flags, init, managedResources, Message, Model, resources, subscriptions, update, view } from "./main.ts";
+import { BrowserHost } from "@effect/ui/html";
+import { Effect, Layer } from "effect";
+import { Palmon, props } from "./main.ts";
 
-const application = Runtime.makeApplication({
-	Model,
-	Flags,
-	init,
-	update,
-	view,
-	subscriptions,
-	resources,
-	managedResources,
-	container: document.getElementById("root"),
-	devTools: { Message, excludeFromHistory: ["TickedClock"] },
-});
+const Main = BrowserHost.mount(Palmon, props, document.getElementById("root")!);
 
-Runtime.run(application, { flags });
+Layer.launch(Main).pipe(Effect.runFork);

@@ -1,10 +1,9 @@
 //! Every sound is synthesized with Tone.js. All pitched notes come from C major
 //! pentatonic, so sounds that overlap still sound like one chord. Tails are
 //! short, the master is quiet, and nothing loops.
-import { Effect, Schema } from "effect";
-import { ManagedResource } from "foldkit";
+import { Context, Effect, Layer, Option, Ref, Schema, type Scope } from "effect";
 import * as Tone from "tone";
-import { createMusic, type Music } from "./music/player.ts";
+import { createMusic, type Music, type MusicMood } from "./music/player.ts";
 
 export const CueName = Schema.Literals([
 	"flip",
@@ -228,25 +227,74 @@ const buildRig = (): Rig => {
 	};
 };
 
-/**
- * The instruments exist while sound is on and the viewer has pressed something
- * on the page. A browser does not start audio before that.
- */
-export const Speaker = ManagedResource.tag<Rig>()("Speaker");
-export type SpeakerService = ManagedResource.ServiceOf<typeof Speaker>;
-
 /** Waits briefly for the audio context to start, then builds the instruments. */
-export const openSpeaker = Effect.promise(() => Tone.start()).pipe(
+const openRig = Effect.promise(() => Tone.start()).pipe(
 	Effect.timeout("1 second"),
 	Effect.ignore,
 	Effect.andThen(Effect.sync(buildRig)),
 );
 
-export const closeSpeaker = (rig: Rig) =>
+const closeRig = (rig: Rig) =>
 	Effect.sync(() => {
 		rig.music.dispose();
 		rig.nodes.forEach((node) => node.dispose());
 	});
+
+/**
+ * The instruments, open while sound is on and the viewer has pressed something
+ * on the page. A browser does not start audio before that. The speaker keeps
+ * the last mood and effects switch it was given, so instruments that open
+ * later start with them. While it is closed, sounds play nothing.
+ */
+export class Speaker extends Context.Service<
+	Speaker,
+	{
+		/** Opens the instruments for the life of the scope. */
+		readonly open: Effect.Effect<void, never, Scope.Scope>;
+		/** Moves the music to `mood` on its next bar line. */
+		readonly setMood: (mood: MusicMood) => Effect.Effect<void>;
+		/** Switches the effects bus. The music bus is separate and keeps playing. */
+		readonly setEffectsOn: (isOn: boolean) => Effect.Effect<void>;
+		readonly play: (cues: ReadonlyArray<Cue>) => Effect.Effect<void>;
+	}
+>()("palmon/Speaker") {
+	static readonly layer = Layer.effect(
+		Speaker,
+		Effect.gen(function* () {
+			const maybeRig = yield* Ref.make(Option.none<Rig>());
+			const mood = yield* Ref.make<MusicMood>("off");
+			const isEffectsOn = yield* Ref.make(true);
+
+			// Tone.js throws on some scheduling races. A sound that fails is skipped, and the app keeps going.
+			const withRig = (f: (rig: Rig) => Effect.Effect<void>) =>
+				Ref.get(maybeRig).pipe(
+					Effect.flatMap(Option.match({ onNone: () => Effect.void, onSome: f })),
+					Effect.catchDefect((defect) => Effect.logWarning("speaker skipped a sound", defect)),
+				);
+
+			const acquire = Effect.gen(function* () {
+				const rig = yield* openRig;
+				rig.setEffectsOn(yield* Ref.get(isEffectsOn));
+				rig.music.setMood(yield* Ref.get(mood));
+				yield* Ref.set(maybeRig, Option.some(rig));
+				return rig;
+			});
+			const release = (rig: Rig) => Ref.set(maybeRig, Option.none()).pipe(Effect.andThen(closeRig(rig)));
+
+			return {
+				open: Effect.acquireRelease(acquire, release).pipe(
+					Effect.asVoid,
+					Effect.catchDefect((defect) => Effect.logWarning("speaker could not open", defect)),
+				),
+				setMood: (next) =>
+					Ref.set(mood, next).pipe(Effect.andThen(withRig((rig) => Effect.sync(() => rig.music.setMood(next))))),
+				setEffectsOn: (isOn) =>
+					Ref.set(isEffectsOn, isOn).pipe(Effect.andThen(withRig((rig) => Effect.sync(() => rig.setEffectsOn(isOn))))),
+				play: (cues) => withRig((rig) => playCues(rig, cues)),
+			};
+		}),
+	);
+}
 
 /** Seconds after a beat starts when each shot fires: one, or three for a heavy attack. Matches `shotTimes` in the view. */
 const shotTimes = (amount: number) => (amount > 1 ? [0.14, 0.22, 0.3] : [0.22]);
@@ -388,7 +436,7 @@ const VOICES: Readonly<Record<CueName, (r: Rig, t: number, amount: number) => vo
  * Plays each cue at its delay. A context that the browser suspended is
  * resumed first. With effects off only `duck` runs, since it shapes the music.
  */
-export const playCues = (rig: Rig, cues: ReadonlyArray<Cue>) =>
+const playCues = (rig: Rig, cues: ReadonlyArray<Cue>) =>
 	Effect.sync(() => {
 		if (Tone.getContext().state !== "running") void Tone.start();
 		const now = Tone.now() + 0.02;
